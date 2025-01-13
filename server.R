@@ -1,3 +1,15 @@
+library(shiny)
+library(shinydashboard)
+library(ggplot2)
+library(scales)
+library(dplyr)
+library(ggpubr)
+library(DT)
+library(fontawesome)
+library(grid)
+library(plotly)
+library(tidyr)
+
 # Server
 server <- function(input, output, session) {
   options(shiny.maxRequestSize = 50 * 1024^2)
@@ -97,9 +109,9 @@ server <- function(input, output, session) {
             x = ~month, 
             y = ~total_transaksi, 
             type = 'bar', 
-            text = ~paste("Total Transaksi: ", total_transaksi, 
-                          "<br>Total IDR: ", scales::comma(total_idr)),
-            hoverinfo = "text",
+            hoverinfo = "x+y",  # Menampilkan informasi hanya saat hover
+            hovertemplate = ~paste("Total Transaksi: ", total_transaksi, 
+                                   "<br>Total IDR: ", scales::comma(total_idr), "<extra></extra>"),
             marker = list(color = 'rgba(55, 128, 191, 0.7)', 
                           line = list(color = 'rgba(55, 128, 191, 1.0)', width = 1.5))
     ) %>%
@@ -149,33 +161,85 @@ server <- function(input, output, session) {
     )
   })
   
-  # Count maskapai per status pembayaran
-  output$maskapai_per_status <- renderDataTable({
+  # Statistik Maskapai per Status Pembayaran
+  output$maskapai_completed <- renderValueBox({
     req(data())
-    maskapai_per_status <- data() %>%
-      group_by(Status.Pay) %>%
-      summarise(jumlah_maskapai = n_distinct(Airname), .groups = 'drop') %>%
-      arrange(desc(jumlah_maskapai))
+    jumlah_completed <- data() %>%
+      filter(Status.Pay == "completed") %>%
+      summarise(jumlah_maskapai = n_distinct(Airname)) %>%
+      pull(jumlah_maskapai)
     
-    datatable(maskapai_per_status, options = list(pageLength = 5, scrollX = TRUE))
+    valueBox(
+      jumlah_completed, "Maskapai (Completed)", icon = icon("check-circle"), color = "green"
+    )
   })
   
-  # Maskapai dengan retensi penggunaan tertinggi (5 atas dan bawah)
+  output$maskapai_open <- renderValueBox({
+    req(data())
+    jumlah_open <- data() %>%
+      filter(Status.Pay == "Open") %>%
+      summarise(jumlah_maskapai = n_distinct(Airname)) %>%
+      pull(jumlah_maskapai)
+    
+    valueBox(
+      jumlah_open, "Maskapai (Open)", icon = icon("exclamation-circle"), color = "yellow"
+    )
+  })
+  
+  output$maskapai_waiting_reconcile <- renderValueBox({
+    req(data())
+    jumlah_waiting_reconcile <- data() %>%
+      filter(Status.Pay == "Waiting Reconciale") %>%
+      summarise(jumlah_maskapai = n_distinct(Airname)) %>%
+      pull(jumlah_maskapai)
+    
+    valueBox(
+      jumlah_waiting_reconcile, "Maskapai (Waiting Reconcile)", icon = icon("sync-alt"), color = "blue"
+    )
+  })
+  
+  output$maskapai_waiting_payment <- renderValueBox({
+    req(data())
+    jumlah_waiting_payment <- data() %>%
+      filter(Status.Pay == "Waiting Payment") %>%
+      summarise(jumlah_maskapai = n_distinct(Airname)) %>%
+      pull(jumlah_maskapai)
+    
+    valueBox(
+      jumlah_waiting_payment, "Maskapai (Waiting Payment)", icon = icon("credit-card"), color = "red"
+    )
+  })
+  
   output$top_retensi_maskapai <- renderTable({
     req(data())
+    
+    # Menghitung total transaksi per maskapai
     retensi <- data() %>%
       group_by(Airname) %>%
-      summarise(total_transaksi = n(), .groups = 'drop') %>%
-      arrange(desc(total_transaksi))
+      summarise(retensi_transaksi = n(), .groups = 'drop') %>%
+      arrange(desc(retensi_transaksi))
     
+    # Menyusun Top 5 dan Bottom 5 maskapai berdasarkan total transaksi
     top5 <- retensi %>% slice_head(n = 5)  # Top 5
     bottom5 <- retensi %>% slice_tail(n = 5)  # Bottom 5
     
-    list(
-      "Top 5 Retensi" = top5,
-      "Bottom 5 Retensi" = bottom5
-    )
+    # Membuat tabel hasil dengan header yang diinginkan
+    top5_table <- top5 %>%
+      rename(Airname = Airname, Retensi_transaksi = retensi_transaksi) %>%
+      mutate(Header = "Top 5 Teratas") %>%
+      select(Header, Airname, Retensi_transaksi)
+    
+    bottom5_table <- bottom5 %>%
+      rename(Airname = Airname, Retensi_transaksi = retensi_transaksi) %>%
+      mutate(Header = "Top 5 Terbawah") %>%
+      select(Header, Airname, Retensi_transaksi)
+    
+    # Gabungkan tabel Top 5 dan Bottom 5
+    final_table <- bind_rows(top5_table, bottom5_table)
+    
+    return(final_table)
   })
+  
   
   # Maskapai dengan nilai open terbanyak
   output$top_open_maskapai <- renderTable({
@@ -207,7 +271,7 @@ server <- function(input, output, session) {
   output$top_completed_maskapai <- renderTable({
     req(data())
     top_completed <- data() %>%
-      filter(Status.Pay == "Completed") %>%
+      filter(Status.Pay == "completed") %>%
       group_by(Airname) %>%
       summarise(total_transaksi = n(), total_biaya = sum(Total..IDR., na.rm = TRUE), .groups = 'drop') %>%
       arrange(desc(total_transaksi)) %>%
@@ -216,6 +280,127 @@ server <- function(input, output, session) {
     top_completed
   })
   
+  # Dropdown dinamis untuk filter
+  observe({
+    req(data())
+    
+    # Dropdown Maskapai
+    updateSelectInput(session, "filter_maskapai",
+                      choices = c("All", unique(data()$Airname)),
+                      selected = "All")
+    
+    # Dropdown Status Pembayaran
+    updateSelectInput(session, "filter_status",
+                      choices = c("All", "Open", "Waiting Payment", "Waiting Reconciale", "Completed"),
+                      selected = "All")
+    
+    # Dropdown Bulan
+    updateSelectInput(session, "filter_bulan",
+                      choices = c("All", month.name),
+                      selected = "All")
+    
+    # Dropdown Tahun
+    available_years <- c("All", unique(format(data()$Invoice.Date, "%Y")))
+    updateSelectInput(session, "filter_tahun",
+                      choices = available_years,
+                      selected = "All")
+  })
+  
+  # Filter data berdasarkan input
+  filtered_data <- reactive({
+    req(data())
+    df <- data()
+    
+    # Filter Maskapai
+    if (input$filter_maskapai != "All") {
+      df <- df %>% filter(Airname == input$filter_maskapai)
+    }
+    
+    # Filter Status Pembayaran
+    if (input$filter_status != "All") {
+      df <- df %>% filter(Status.Pay == input$filter_status)
+    }
+    
+    # Filter Bulan
+    if (!is.null(input$filter_bulan) && !"All" %in% input$filter_bulan) {
+      df <- df %>% filter(format(Invoice.Date, "%B") %in% input$filter_bulan)
+    }
+    
+    # Filter Tahun
+    if (!is.null(input$filter_tahun) && !"All" %in% input$filter_tahun) {
+      df <- df %>% filter(format(Invoice.Date, "%Y") %in% input$filter_tahun)
+    }
+    
+    return(df)
+  })
+  
+  output$filter_visual_transaksi <- renderPlotly({
+    req(filtered_data())
+    
+    transaksi_per_bulan <- filtered_data() %>%
+      group_by(month = format(Invoice.Date, "%Y-%m")) %>%
+      summarise(total_transaksi = n(), .groups = 'drop')
+    
+    plot_ly(
+      data = transaksi_per_bulan,
+      x = ~month,
+      y = ~total_transaksi,
+      type = 'bar',
+      hoverinfo = "x+y",  # Menampilkan informasi hanya saat hover
+      hovertemplate = ~paste(
+        "Bulan: ", month, 
+        "<br>Total Transaksi ", format(total_transaksi, scientific = FALSE),
+        "<extra></extra>"
+      ),
+      marker = list(
+        color = 'rgba(55, 128, 191, 0.7)', 
+        line = list(color = 'rgba(55, 128, 191, 1.0)', width = 1.5)
+      )
+    ) %>%
+      layout(
+        title = "Visualisasi Transaksi per Bulan",
+        xaxis = list(title = "Bulan"),
+        yaxis = list(title = "Total Transaksi"),
+        showlegend = FALSE
+      )
+    
+  })
+  
+  
+  
+  output$filter_visual_idr <- renderPlotly({
+    req(filtered_data())
+    
+    pembayaran_per_bulan <- filtered_data() %>%
+      group_by(month = format(Invoice.Date, "%Y-%m")) %>%
+      summarise(total_idr = sum(Total..IDR., na.rm = TRUE), .groups = 'drop')
+    
+    plot_ly(
+      data = pembayaran_per_bulan,
+      x = ~month,
+      y = ~total_idr,
+      type = "bar",
+      hoverinfo = "x+y",  # Menampilkan informasi hanya saat hover
+      hovertemplate = ~paste(
+        "Bulan: ", month, 
+        "<br>Total Pembayaran: Rp ", format(total_idr, big.mark = ".", scientific = FALSE),  # Format angka Rupiah
+        "<extra></extra>"
+      ),
+      marker = list(
+        color = 'rgba(50, 171, 96, 0.7)', 
+        line = list(color = 'rgba(50, 171, 196, 0.7)', width = 1.5)
+      )
+    ) %>%
+      layout(
+        title = "Total Pembayaran per Bulan",
+        xaxis = list(title = "Bulan"),
+        yaxis = list(title = "Total Pembayaran (IDR)"),
+        showlegend = FALSE  # Tidak menampilkan legenda tambahan
+      )
+  })
+  
+    
+}
+  
   
   # Tambahkan logika lainnya untuk fitur seperti visualisasi dan tabel sesuai kebutuhan
-}
