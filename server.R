@@ -95,32 +95,40 @@ server <- function(input, output, session) {
   })
   
   
-  # Visualisasi Transaksi Responsif
-  output$visualisasi_transaksi <- renderPlotly({
-    req(data())
-    
-    transaksi_per_bulan <- data() %>%
-      mutate(month = format(Invoice.Date, "%Y-%m")) %>%
-      group_by(month) %>%
-      summarise(total_transaksi = n(), total_idr = sum(Total..IDR., na.rm = TRUE))
-    
-    # Plot Bar Responsif
-    plot_ly(transaksi_per_bulan, 
-            x = ~month, 
-            y = ~total_transaksi, 
-            type = 'bar', 
-            hoverinfo = "x+y",  # Menampilkan informasi hanya saat hover
-            hovertemplate = ~paste("Total Transaksi: ", total_transaksi, 
-                                   "<br>Total IDR: ", scales::comma(total_idr), "<extra></extra>"),
-            marker = list(color = 'rgba(55, 128, 191, 0.7)', 
-                          line = list(color = 'rgba(55, 128, 191, 1.0)', width = 1.5))
-    ) %>%
-      layout(
-        title = "Visualisasi Transaksi per Bulan",
-        xaxis = list(title = "Bulan"),
-        yaxis = list(title = "Total Transaksi")
-      )
-  })
+# Visualisasi Transaksi Responsif
+output$visualisasi_transaksi <- renderPlotly({
+  req(data())
+  
+  # Mengelompokkan data berdasarkan bulan
+  transaksi_per_bulan <- data() %>%
+    mutate(month = format(Invoice.Date, "%Y-%m")) %>%
+    group_by(month) %>%
+    summarise(total_transaksi = n(), total_idr = sum(Total..IDR., na.rm = TRUE))
+  
+  # Membuat Line Plot Responsif
+  plot_ly(transaksi_per_bulan, 
+          x = ~month, 
+          y = ~total_transaksi, 
+          type = 'scatter', 
+          mode = 'lines+markers', # Menampilkan garis dan titik
+          line = list(color = 'rgba(55, 128, 191, 1.0)', width = 2), # Gaya garis
+          marker = list(size = 8, color = 'rgba(255, 99, 71, 0.8)'), # Gaya titik
+          hoverinfo = "x+y", # Menampilkan informasi saat hover
+          hovertemplate = ~paste("Bulan: ", month, 
+                                 "<br>Total Transaksi: ", total_transaksi, 
+                                 "<br>Total IDR: ", scales::comma(total_idr), "<extra></extra>")
+  ) %>%
+    layout(
+      title = "Visualisasi Transaksi per Bulan",
+      xaxis = list(title = "Bulan", 
+                   tickangle = -45, # Memiringkan label bulan
+                   showgrid = FALSE), # Menghilangkan garis grid vertikal
+      yaxis = list(title = "Total Transaksi"),
+      hovermode = "x unified", # Menyatukan hover untuk semua elemen di titik x
+      margin = list(t = 50, b = 80) # Mengatur margin agar lebih rapi
+    )
+})
+
   
   # Tabel Transaksi Maskapai per Status Pembayaran
   output$tabel_transaksi_per_status <- renderDataTable({

@@ -13,24 +13,34 @@ library(tidyr)
 # Fungsi css untuk melakukan customisasi page
 css <- function(){
   tags$head(
+    tags$title("AirNav Indonesia"),  # Menambahkan nama website di tab browser
+    tags$link(rel = "icon", href = "https://marketingplatform.digipop.ai/api/assets/uploads/landing_page/133/2024-04/1714038891.png", type = "image/png"),  # Menambahkan favicon
     tags$style(HTML("
       /* Header */
-      .main-header .logo {
-        font-size: 16px;
-        font-weight: bold;
-        color: #fff;
-        padding: 15px 20px; /* Padding lebih besar untuk memberi ruang pada logo */
+      .main-header {
+        position: fixed; /* Menetapkan posisi tetap */
+        top: 0; /* Menempelkan header di atas */
+        width: 100%; /* Lebar penuh sesuai viewport */
+        z-index: 1000; /* Prioritas di atas elemen lain */
         background-color: #007bff;
-        text-align: center;
-        margin-top: 0;
-        display: inline-block; /* Membuat logo tidak mengambil seluruh lebar */
+        box-shadow: 0px 2px 5px rgba(0, 0, 0, 0.1); /* Memberikan bayangan untuk efek elevasi */
       }
       
-      /* Kelas khusus untuk logo */
-      .logo-img {
-        max-height: 36px; /* Sesuaikan ukuran logo */
-        max-width: 120px;
-        margin-top: -32.5px; /* Menyesuaikan posisi gambar logo agar lebih naik */
+      .airnav-logo {
+        width: 120px;   /* Lebar gambar */
+        height: 36px;   /* Tinggi gambar */
+      }
+      
+      .title-container {
+        display: block;
+        align-items: space-between;
+      }
+
+      .title-text {
+        font-size: 24px;  /* Ukuran font untuk title */
+        font-weight: bold;
+        color: #333;
+        margin-left: 10px;
       }
       
       .main-header .navbar-nav {
@@ -59,12 +69,13 @@ css <- function(){
       /* Sidebar */
       .main-sidebar {
         background-color: #343a40;
-        height: 100%;
+        height: calc(100vh - 50px); /* Menyesuaikan tinggi sidebar dengan mengurangi tinggi header */
         padding-top: 60px;
         position: fixed;
         width: 250px;
         transition: all 0.3s;
         box-shadow: 2px 0 5px rgba(0, 0, 0, 0.2); /* Menambahkan shadow */
+        top: 50px; /* Menyesuaikan posisi di bawah header */
       }
       
       .main-sidebar .sidebar {
@@ -97,7 +108,8 @@ css <- function(){
       
       /* Konten utama */
       .content-wrapper {
-        margin-left: 250px;
+        margin-left: 250px; /* Memberikan ruang untuk sidebar */
+        margin-top: 50px; /* Memberikan ruang untuk header tetap */
         background-color: #f4f6f9;
         padding: 20px;
         overflow-x: hidden;
@@ -152,12 +164,16 @@ css <- function(){
 }
 
 
+
 # UI
 ui <- dashboardPage(
-  dashboardHeader(title = tags$img(src = "https://www.airnavindonesia.co.id/wp-content/uploads/2024/09/LOGOAIRNAVINDONESIALandscapePutih-1.png", 
-                                   class = "logo-img",  # Menambahkan kelas logo-img
-                                   height = '36', 
-                                   width = '120'),
+  dashboardHeader(title = tags$div(
+    class = "title-container",
+    tags$img(src="https://www.airnavindonesia.co.id/wp-content/uploads/2024/09/LOGOAIRNAVINDONESIALandscapePutih-1.png", 
+             alt="AirNav Indonesia Logo", 
+             class="airnav-logo"),
+    tags$h1("AirNav Indonesia Dashboard", class="title-text")
+  ),
                   tags$li(class="dropdown",tags$a(href="https://www.linkedin.com/in/dimyadi/" ,icon("linkedin"), "My Profile", target="_blank")),
                   tags$li(class="dropdown",tags$a(href="https://github.com/dimyadi1123", icon("github"), "Source Code", target="_blank"))),
   dashboardSidebar(
